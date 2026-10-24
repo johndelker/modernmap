@@ -241,7 +241,7 @@ function minimap.update()
 
     local isLocked = boussole.config.minimapLocked[1]
 
-    if boussole.isMoving and boussole.config.transparentMinimapWhenMoving[1] then
+    if boussole.isMoving and boussole.config.minimapMovingUseDifferentOpacity[1] then
         imgui.PushStyleVar(ImGuiStyleVar_Alpha, boussole.config.minimapMovingOpacity[1])
     end
 
@@ -580,7 +580,7 @@ function minimap.update()
 
     imgui.End()
 
-    if boussole.isMoving and boussole.config.transparentMinimapWhenMoving[1] then
+    if boussole.isMoving and boussole.config.minimapMovingUseDifferentOpacity[1] then
         imgui.PopStyleVar()
     end
 end
