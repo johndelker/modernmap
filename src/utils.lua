@@ -252,6 +252,62 @@ function utils.draw_square_marker(drawList, screenX, screenY, radius, color, out
     end
 end
 
+-- Callers pass half of the configured diameter as radius. A nil/Default icon
+-- lets each overlay retain its original marker shape.
+function utils.draw_configured_marker(drawList, markerIcon, screenX, screenY, radius, color, outlineColor, outlineThickness)
+    if not markerIcon or markerIcon == 'Default' then return false end
+
+    outlineThickness = outlineThickness or 1.5
+    if markerIcon == 'Dot' then
+        utils.draw_circle_marker(drawList, screenX, screenY, radius, color, outlineColor, outlineThickness)
+    elseif markerIcon == 'Circle' then
+        drawList:AddCircle({ screenX, screenY }, radius, color, 0, math.max(1.5, outlineThickness))
+    elseif markerIcon == 'X' then
+        local arm = radius * 0.75
+        if outlineColor then
+            drawList:AddLine({ screenX - arm, screenY - arm }, { screenX + arm, screenY + arm }, outlineColor, outlineThickness + 2)
+            drawList:AddLine({ screenX - arm, screenY + arm }, { screenX + arm, screenY - arm }, outlineColor, outlineThickness + 2)
+        end
+        drawList:AddLine({ screenX - arm, screenY - arm }, { screenX + arm, screenY + arm }, color, outlineThickness)
+        drawList:AddLine({ screenX - arm, screenY + arm }, { screenX + arm, screenY - arm }, color, outlineThickness)
+    elseif markerIcon == 'Diamond' then
+        utils.draw_diamond_marker(drawList, screenX, screenY, radius, color, outlineColor)
+    elseif markerIcon == 'Square' then
+        drawList:AddRectFilled({ screenX - radius, screenY - radius }, { screenX + radius, screenY + radius }, color)
+        if outlineColor then
+            drawList:AddRect({ screenX - radius, screenY - radius }, { screenX + radius, screenY + radius }, outlineColor, 0.0, 0, outlineThickness)
+        end
+    elseif markerIcon == 'Triangle' then
+        local top = { screenX, screenY - radius }
+        local left = { screenX - radius, screenY + radius * 0.8 }
+        local right = { screenX + radius, screenY + radius * 0.8 }
+        drawList:AddTriangleFilled(top, left, right, color)
+        if outlineColor then
+            drawList:AddLine(top, left, outlineColor, outlineThickness)
+            drawList:AddLine(left, right, outlineColor, outlineThickness)
+            drawList:AddLine(right, top, outlineColor, outlineThickness)
+        end
+    elseif markerIcon == 'Star' then
+        local points = {}
+        for i = 0, 9 do
+            local angle = -math.pi / 2 + i * math.pi / 5
+            local pointRadius = (i % 2 == 0) and radius or (radius * 0.45)
+            points[i + 1] = { screenX + math.cos(angle) * pointRadius, screenY + math.sin(angle) * pointRadius }
+        end
+        for i = 1, 10 do
+            local nextIndex = (i % 10) + 1
+            drawList:AddTriangleFilled({ screenX, screenY }, points[i], points[nextIndex], color)
+            if outlineColor then
+                drawList:AddLine(points[i], points[nextIndex], outlineColor, outlineThickness)
+            end
+        end
+    else
+        return false
+    end
+
+    return true
+end
+
 function utils.draw_rotated_texture(drawList, texturePtr, centerX, centerY, size, angle, color)
     local halfSize = size / 2
     local cos_angle = math.cos(angle)

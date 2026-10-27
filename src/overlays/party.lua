@@ -4,10 +4,7 @@ local imgui = require('imgui')
 local map = require('src.map')
 local tooltip = require('src.overlays.tooltip')
 local utils = require('src.utils')
-local texture = require('src.texture')
-local ffi = require('ffi')
-
-party_overlay.cursor = {}
+local party_positions = require('src.party_positions')
 
 function party_overlay.draw(contextConfig, mapData, windowPosX, windowPosY, contentMinX, contentMinY, mapOffsetX, mapOffsetY, mapZoom, textureWidth, contextAlpha, contextLabels)
     contextConfig = contextConfig or boussole.config
@@ -27,34 +24,29 @@ function party_overlay.draw(contextConfig, mapData, windowPosX, windowPosY, cont
     local playerZone = AshitaCore:GetMemoryManager():GetParty():GetMemberZone(0)
     if (mapData.entry and mapData.entry.ZoneId ~= playerZone and not (mapData.entry._redirected and mapData.entry._originalZone == playerZone)) then return end
 
-    if not party_overlay.cursor.texture then
-        texture.load_texture('cursor', party_overlay.cursor)
-    end
-
-    if not party_overlay.cursor.texture then
-        return
-    end
-
     local partyMgr = AshitaCore:GetMemoryManager():GetParty()
     if not partyMgr then return end
+    local playerEntity = GetPlayerEntity()
+    local playerPosition = playerEntity and playerEntity.Movement.LocalPosition or nil
 
     local drawList = imgui.GetWindowDrawList()
     local mousePosX, mousePosY = imgui.GetMousePos()
 
-    local cursorSize = contextConfig.iconSizeParty[1] or 20.0
-    local halfSize = cursorSize / 2.0
+    local markerRadius = (contextConfig.iconSizeParty[1] or 20.0) / 2
 
     for i = 1, 5 do
         if partyMgr:GetMemberIsActive(i) == 1 then
+            local serverId = partyMgr:GetMemberServerId(i)
             local entityIndex = partyMgr:GetMemberTargetIndex(i)
+            local entity = (entityIndex and entityIndex > 0) and GetEntity(entityIndex) or nil
+            if entity and entity.Render.Flags0 == 0 then entity = nil end
 
-            if entityIndex and entityIndex > 0 then
-                local entity = GetEntity(entityIndex)
+            local position = party_positions.get_marker_position(serverId, playerZone, entity, playerPosition)
 
-                if entity and entity.Render.Flags0 ~= 0 then
-                    local memberX = entity.Movement.LastPosition.X
-                    local memberY = entity.Movement.LastPosition.Y
-                    local memberZ = entity.Movement.LastPosition.Z
+            if position then
+                    local memberX = position.x
+                    local memberY = position.y
+                    local memberZ = position.z
 
                     local mapX, mapY = map.world_to_map_coords(mapData.entry, memberX, memberY, memberZ)
 
@@ -71,33 +63,32 @@ function party_overlay.draw(contextConfig, mapData, windowPosX, windowPosY, cont
                         local screenX = windowPosX + contentMinX + mapOffsetX + texX * mapZoom
                         local screenY = windowPosY + contentMinY + mapOffsetY + texY * mapZoom
 
-                        local heading = (entity.Heading or 0) + (math.pi / 2)
+                        local partyColor = contextConfig.colorParty or { 0.349, 0.639, 1.0, 1.0 }
+                        local markerColor = utils.mul_alpha(utils.rgb_to_abgr(partyColor), contextAlpha)
+                        local outlineColor = utils.mul_alpha(utils.rgb_to_abgr({ 0.0, 0.0, 0.0, 1.0 }), contextAlpha)
 
                         -- Draw label above party member if showLabels is enabled
                         if showLabels then
-                            local memberName = entity.Name or ('Party ' .. i)
-                            local textColor = utils.mul_alpha(utils.rgb_to_abgr(contextConfig.colorParty), contextAlpha)
-                            utils.draw_label(drawList, memberName, screenX, screenY, cursorSize, textColor, contextAlpha)
+                            local memberName = (entity and entity.Name) or partyMgr:GetMemberName(i) or ('Party ' .. i)
+                            utils.draw_label(drawList, memberName, screenX, screenY, markerRadius, markerColor, contextAlpha)
                         end
 
                         local dx = mousePosX - screenX
                         local dy = mousePosY - screenY
                         local distance = math.sqrt(dx * dx + dy * dy)
 
-                        if distance <= halfSize then
-                            local memberName = entity.Name
+                        if distance <= markerRadius + 5 then
+                            local memberName = (entity and entity.Name) or partyMgr:GetMemberName(i)
                             if memberName and memberName ~= '' then
-                                local color = utils.rgb_to_abgr(contextConfig.colorParty)
+                                local color = utils.rgb_to_abgr(partyColor)
                                 tooltip.add_line(string.format('%s (Party)', memberName), color)
                             end
                         end
 
-                        if party_overlay.cursor.pointer then
-                            local color = utils.mul_alpha(utils.rgb_to_abgr(contextConfig.colorParty), contextAlpha)
-                            utils.draw_rotated_texture(drawList, party_overlay.cursor.pointer, screenX, screenY, cursorSize, heading, color)
+                        if not utils.draw_configured_marker(drawList, contextConfig.markerIconParty and contextConfig.markerIconParty[1], screenX, screenY, markerRadius, markerColor, outlineColor, 1.5) then
+                            utils.draw_circle_marker(drawList, screenX, screenY, markerRadius, markerColor, outlineColor, 1.5)
                         end
                     end
-                end
             end
         end
     end

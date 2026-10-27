@@ -1,4 +1,6 @@
-# boussole — FFXI Map Addon for Ashita
+# ModernMap — FFXI Map Addon for Ashita
+
+A WIP fork of Boussole.
 
 <p align="center">
   <img src="https://raw.githubusercontent.com/loonsies/boussole/refs/heads/main/assets/logo.png" alt="Image 1" width="700" style="max-width: 100%;"/>

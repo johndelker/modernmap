@@ -34,6 +34,7 @@ ui.drag_start = { x = 0, y = 0 }
 ui.drag_moved = false
 ui.last_right_click = { time = 0, x = 0, y = 0 }
 ui.window_bounds = nil
+ui.window_outer_bounds = nil
 ui.window_focused = false
 ui.current_view_key = nil
 ui.last_saved_offset = { x = 0, y = 0 }
@@ -175,6 +176,7 @@ function ui.center_on_player(mapData, availWidth, availHeight, textureWidth, tex
 end
 
 function ui.drawUI()
+    ui.window_outer_bounds = nil
     if boussole.isMoving and boussole.config.transparentMapWhenMoving[1] then
         imgui.PushStyleVar(ImGuiStyleVar_Alpha, boussole.config.movingMapOpacity[1])
     end
@@ -182,13 +184,25 @@ function ui.drawUI()
     imgui.SetNextWindowSize({ 800, 600 }, ImGuiCond_FirstUseEver)
     imgui.PushStyleVar(ImGuiStyleVar_WindowPadding, { 0, 0 })
 
-    local flags = bit.bor(ImGuiWindowFlags_NoScrollbar, ImGuiWindowFlags_NoScrollWithMouse, boussole.config.titleBarVisible[1] and 0 or ImGuiWindowFlags_NoTitleBar)
+    local flags = bit.bor(
+        ImGuiWindowFlags_NoScrollbar,
+        ImGuiWindowFlags_NoScrollWithMouse,
+        boussole.config.titleBarVisible[1] and 0 or ImGuiWindowFlags_NoTitleBar)
 
     if imgui.Begin(ICON_FA_COMPASS .. ' boussole', boussole.visible, flags) then
         imgui.PopStyleVar()
 
         -- Track window focus state
         ui.window_focused = imgui.IsWindowFocused()
+
+        local outerX, outerY = imgui.GetWindowPos()
+        local outerWidth, outerHeight = imgui.GetWindowSize()
+        ui.window_outer_bounds = {
+            x1 = outerX,
+            y1 = outerY,
+            x2 = outerX + outerWidth,
+            y2 = outerY + outerHeight
+        }
 
         if ui.texture_id and ui.map_texture then
             local windowPosX, windowPosY = imgui.GetWindowPos()
@@ -647,6 +661,13 @@ function ui.is_over_map_area()
     -- Check if mouse is within window content bounds
     return mouseX >= ui.window_bounds.x1 and mouseX <= ui.window_bounds.x2 and
         mouseY >= ui.window_bounds.y1 and mouseY <= ui.window_bounds.y2
+end
+
+function ui.is_over_window()
+    if not ui.window_outer_bounds then return false end
+    local mouseX, mouseY = imgui.GetMousePos()
+    return mouseX >= ui.window_outer_bounds.x1 and mouseX <= ui.window_outer_bounds.x2 and
+        mouseY >= ui.window_outer_bounds.y1 and mouseY <= ui.window_outer_bounds.y2
 end
 
 return ui

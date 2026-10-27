@@ -85,11 +85,13 @@ function warp_overlay.draw(contextConfig, mapData, windowPosX, windowPosY, conte
                             hovered_index = idx
                         end
 
-                        local markerRadius = contextConfig.iconSizeHomepoint[1] or 8.0
+                        local markerRadius = (contextConfig.iconSizeHomepoint[1] or 8.0) / 2
                         local markerColor = utils.mul_alpha(utils.rgb_to_abgr(contextConfig.colorHomepoint), contextAlpha)
                         local outlineColor = utils.mul_alpha(utils.rgb_to_abgr({ 1.0, 1.0, 1.0, 1.0 }), contextAlpha)
 
-                        utils.draw_diamond_marker(drawList, screenX, screenY, markerRadius, markerColor, outlineColor)
+                        if not utils.draw_configured_marker(drawList, contextConfig.markerIconHomepoint and contextConfig.markerIconHomepoint[1], screenX, screenY, markerRadius, markerColor, outlineColor) then
+                            utils.draw_diamond_marker(drawList, screenX, screenY, markerRadius, markerColor, outlineColor)
+                        end
 
                         if showLabels and (contextConfig.showHomepointLabels == nil or contextConfig.showHomepointLabels[1]) then
                             utils.draw_label(drawList, string.format('Homepoint #%d', idx), screenX, screenY, markerRadius, markerColor, contextAlpha)
@@ -141,11 +143,13 @@ function warp_overlay.draw(contextConfig, mapData, windowPosX, windowPosY, conte
                             hovered_index = 0 -- No index for survival guides
                         end
 
-                        local markerRadius = contextConfig.iconSizeSurvivalGuide[1] or 8.0
+                        local markerRadius = (contextConfig.iconSizeSurvivalGuide[1] or 8.0) / 2
                         local markerColor = utils.mul_alpha(utils.rgb_to_abgr(contextConfig.colorSurvivalGuide), contextAlpha)
                         local outlineColor = utils.mul_alpha(utils.rgb_to_abgr({ 1.0, 1.0, 1.0, 1.0 }), contextAlpha)
 
-                        utils.draw_square_marker(drawList, screenX, screenY, markerRadius, markerColor, outlineColor, 1.5)
+                        if not utils.draw_configured_marker(drawList, contextConfig.markerIconSurvivalGuide and contextConfig.markerIconSurvivalGuide[1], screenX, screenY, markerRadius, markerColor, outlineColor, 1.5) then
+                            utils.draw_square_marker(drawList, screenX, screenY, markerRadius / 0.8, markerColor, outlineColor, 1.5)
+                        end
 
                         if showLabels and (contextConfig.showSurvivalGuideLabels == nil or contextConfig.showSurvivalGuideLabels[1]) then
                             utils.draw_label(drawList, 'Survival Guide', screenX, screenY, markerRadius, markerColor, contextAlpha)

@@ -24,7 +24,7 @@ function mob_entities.draw(contextConfig, mapData, windowPosX, windowPosY, conte
     local trackerEntities = tracker.get_tracked_entities()
     local activeEntities = tracker.get_active_entities()
 
-    local iconSize = contextConfig.iconSizeMobEntity and contextConfig.iconSizeMobEntity[1] or 6
+    local markerRadius = (contextConfig.iconSizeMobEntity and contextConfig.iconSizeMobEntity[1] or 6) / 2
     local drawList = imgui.GetWindowDrawList()
 
     local playerZone = AshitaCore:GetMemoryManager():GetParty():GetMemberZone(0)
@@ -77,13 +77,16 @@ function mob_entities.draw(contextConfig, mapData, windowPosX, windowPosY, conte
 
                         local colorU32 = utils.mul_alpha(utils.rgb_to_abgr(contextConfig.colorMobEntity), contextAlpha)
 
-                        utils.draw_circle_marker(drawList, screenX, screenY, iconSize, colorU32, utils.mul_alpha(utils.rgb_to_abgr({ 0.0, 0.0, 0.0, 1.0 }), contextAlpha), 2.0)
+                        local outlineColor = utils.mul_alpha(utils.rgb_to_abgr({ 0.0, 0.0, 0.0, 1.0 }), contextAlpha)
+                        if not utils.draw_configured_marker(drawList, contextConfig.markerIconMobEntity and contextConfig.markerIconMobEntity[1], screenX, screenY, markerRadius, colorU32, outlineColor, 1.5) then
+                            utils.draw_circle_marker(drawList, screenX, screenY, markerRadius, colorU32, outlineColor, 1.5)
+                        end
 
                         -- Add to tooltip if hovering
                         local mousePosX, mousePosY = imgui.GetMousePos()
                         local distance = math.sqrt((mousePosX - screenX) ^ 2 + (mousePosY - screenY) ^ 2)
 
-                        if distance <= iconSize + 5 then
+                        if distance <= markerRadius + 5 then
                             local displayName = entity.alias or entity.name
                             tooltip.add_line(displayName, colorU32)
                         end
@@ -91,7 +94,7 @@ function mob_entities.draw(contextConfig, mapData, windowPosX, windowPosY, conte
                         -- Draw label above marker if showLabels is enabled
                         if showLabels then
                             local displayName = entity.alias or entity.name
-                            utils.draw_label(drawList, displayName, screenX, screenY, iconSize, colorU32, contextAlpha)
+                            utils.draw_label(drawList, displayName, screenX, screenY, markerRadius, colorU32, contextAlpha)
                         end
                     end
                 end

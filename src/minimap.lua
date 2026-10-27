@@ -5,6 +5,7 @@ local settings = require('settings')
 local map = require('src.map')
 local ffi = require('ffi')
 local utils = require('src.utils')
+local ui = require('src.ui')
 local player_overlay = require('src.overlays.player')
 local party_overlay = require('src.overlays.party')
 local alliance_overlay = require('src.overlays.alliance')
@@ -20,6 +21,12 @@ minimap.map_zoom = -1.0
 minimap.map_offset = { x = 0, y = 0 }
 minimap.window_bounds = nil
 minimap.last_zone_key = nil
+minimap.visible_radius_yalms = nil
+minimap.current_map_data = nil
+minimap.texture_id = nil
+minimap.map_texture = nil
+minimap.last_load_attempt_key = nil
+minimap.last_load_attempt_time = 0
 
 -- Right-click pan state
 minimap.is_dragging = false
@@ -30,11 +37,47 @@ minimap.is_recentering = false
 minimap.last_frame_time = 0.0
 
 -- Returns the zone+floor key for detecting zone changes
-local function get_zone_key()
-    if not map.current_map_data or not map.current_map_data.entry then
+local function get_zone_key(mapData)
+    if not mapData or not mapData.entry then
         return nil
     end
-    return string.format('%d_%d', map.current_map_data.entry.ZoneId, map.current_map_data.entry.FloorId)
+    return string.format('%d_%d', mapData.entry.ZoneId, mapData.entry.FloorId)
+end
+
+local function update_current_map()
+    local entry = map.get_current_map()
+    if not entry then
+        minimap.current_map_data = nil
+        minimap.texture_id = nil
+        minimap.map_texture = nil
+        minimap.current_map_key = nil
+        return false
+    end
+
+    local mapData = { entry = entry }
+    local zoneKey = get_zone_key(mapData)
+    if zoneKey ~= minimap.current_map_key then
+        minimap.current_map_data = nil
+        minimap.texture_id = nil
+        minimap.map_texture = nil
+        minimap.current_map_key = zoneKey
+        minimap.last_load_attempt_key = nil
+    end
+
+    if not minimap.texture_id and
+        (minimap.last_load_attempt_key ~= zoneKey or os.clock() - minimap.last_load_attempt_time >= 2.0) then
+        minimap.last_load_attempt_key = zoneKey
+        minimap.last_load_attempt_time = os.clock()
+        local texture = require('src.texture')
+        local textureId, textureData = texture.load_map_texture(mapData)
+        if textureId and textureData then
+            minimap.current_map_data = mapData
+            minimap.texture_id = textureId
+            minimap.map_texture = textureData
+        end
+    end
+
+    return minimap.current_map_data ~= nil
 end
 
 -- Load saved zoom for a zone key - returns nil if not saved
@@ -115,7 +158,7 @@ local function draw_controls(windowPosX, windowPosY, contentMinX, contentMinY, a
     imgui.PushStyleVar(ImGuiStyleVar_FrameRounding, 3.0)
     imgui.PushStyleVar(ImGuiStyleVar_FrameBorderSize, 0.0)
 
-    local baseColor    = boussole.config.minimapColorControlsBtn
+    local baseColor    = boussole.config.colorControlsBtn
     local btnColor     = utils.rgb_to_abgr(baseColor)
     local hoverColor   = utils.rgb_to_abgr({ baseColor[1], baseColor[2], baseColor[3], math.min(1.0, (baseColor[4] or 1.0) + 0.2) })
     local actColor     = utils.rgb_to_abgr({ baseColor[1], baseColor[2], baseColor[3], math.min(1.0, (baseColor[4] or 1.0) + 0.3) })
@@ -140,7 +183,7 @@ local function draw_controls(windowPosX, windowPosY, contentMinX, contentMinY, a
         local offsetX   = (buttonSize - iconSize) / 2
         local offsetY   = (buttonSize - iconSize) / 2
         local texPtr    = tonumber(ffi.cast('uint32_t', controls.tag_icon.pointer))
-        local iconColor = labelsActive and utils.rgb_to_abgr(boussole.config.minimapColorControlsBtnActive) or 0xFFFFFFFF
+        local iconColor = labelsActive and utils.rgb_to_abgr(boussole.config.colorControlsBtnActive) or 0xFFFFFFFF
         drawList:AddImage(texPtr,
             { startX + offsetX, startY + offsetY },
             { startX + offsetX + iconSize, startY + offsetY + iconSize },
@@ -184,9 +227,9 @@ local function draw_controls(windowPosX, windowPosY, contentMinX, contentMinY, a
     local lockLabel     = (isLocked and ICON_FA_LOCK or ICON_FA_UNLOCK) .. '##MinimapLock'
 
     -- Tint button background when locked to show active state
-    local lockBtnColor  = isLocked and utils.rgb_to_abgr(boussole.config.minimapColorControlsBtnActive) or btnColor
+    local lockBtnColor  = isLocked and utils.rgb_to_abgr(boussole.config.colorControlsBtnActive) or btnColor
 
-    local lockIconColor = isLocked and utils.rgb_to_abgr(boussole.config.minimapColorControlsBtnActive) or 0xFFFFFFFF
+    local lockIconColor = isLocked and utils.rgb_to_abgr(boussole.config.colorControlsBtnActive) or 0xFFFFFFFF
 
     imgui.PushStyleColor(ImGuiCol_Button, lockBtnColor)
     imgui.PushStyleColor(ImGuiCol_ButtonHovered, hoverColor)
@@ -217,18 +260,31 @@ end
 
 -- Main draw function
 function minimap.update()
+    minimap.visible_radius_yalms = nil
     if not boussole.config.minimapVisible[1] then return end
 
-    -- Grab shared texture from ui module
-    local ui = require('src.ui')
-    if not ui.texture_id or not ui.map_texture then return end
-    if not map.current_map_data or not map.current_map_data.entry then return end
-    if map.current_map_data.entry.ZoneId == 0 and map.current_map_data.entry.FloorId == 0 then return end
+    if boussole.config.minimapHideDuringCutscenes and boussole.config.minimapHideDuringCutscenes[1] then
+        local player = GetPlayerEntity()
+        if player and player.Status == 4 then return end
+    end
+
+    if boussole.config.minimapHideOnBoat and boussole.config.minimapHideOnBoat[1] then
+        local zone = map.get_player_zone()
+        -- Ship routes (46, 47, 220-221, 227-228) and airships (223-226).
+        if zone == 46 or zone == 47 or (zone and zone >= 220 and zone <= 228) then return end
+    end
+
+    if not update_current_map() then return end
+    local mapData = minimap.current_map_data
+    local textureId = minimap.texture_id
+    local mapTexture = minimap.map_texture
+    if not textureId or not mapTexture then return end
+    if mapData.entry.ZoneId == 0 and mapData.entry.FloorId == 0 then return end
 
     local size = math.max(80, boussole.config.minimapSize[1] or 200)
 
     -- Detect zone change and restore saved zoom for the new zone
-    local zoneKey = get_zone_key()
+    local zoneKey = get_zone_key(mapData)
     if zoneKey ~= minimap.last_zone_key then
         local saved = load_zone_zoom(zoneKey)
         minimap.map_zoom = (saved and saved > 0) and saved or -1.0
@@ -240,10 +296,6 @@ function minimap.update()
     end
 
     local isLocked = boussole.config.minimapLocked[1]
-
-    if boussole.isMoving and boussole.config.minimapMovingUseDifferentOpacity[1] then
-        imgui.PushStyleVar(ImGuiStyleVar_Alpha, boussole.config.minimapMovingOpacity[1])
-    end
 
     -- Enforce square size every frame
     imgui.SetNextWindowSize({ size, size }, ImGuiCond_Always)
@@ -259,6 +311,9 @@ function minimap.update()
         ImGuiWindowFlags_NoResize,
         ImGuiWindowFlags_NoBackground
     )
+    if boussole.visible[1] then
+        windowFlags = bit.bor(windowFlags, ImGuiWindowFlags_NoBringToFrontOnFocus)
+    end
     if isLocked then
         windowFlags = bit.bor(windowFlags, ImGuiWindowFlags_NoMove)
     end
@@ -281,8 +336,8 @@ function minimap.update()
             y2 = windowPosY + contentMinY + availHeight,
         }
 
-        local texW                     = ui.map_texture.width
-        local texH                     = ui.map_texture.height
+        local texW                     = mapTexture.width
+        local texH                     = mapTexture.height
 
         -- Compute minimum zoom to fully cover available area
         local minZoomX                 = availWidth / texW
@@ -316,8 +371,9 @@ function minimap.update()
 
         -- Mouse-wheel zoom (only when hovered)
         local isHovered = minimap.is_over_map_area()
+        local fullMapBlocksMouse = boussole.visible[1] and ui.is_over_window()
         local mouseWheel = imgui.GetIO().MouseWheel
-        if isHovered and mouseWheel ~= 0 then
+        if isHovered and not fullMapBlocksMouse and mouseWheel ~= 0 then
             local step = boussole.config.minimapZoomStep[1] or 0.1
             local oldZoom = minimap.map_zoom
             local newZoom = math.max(minZoom, math.min(oldZoom + mouseWheel * step, 5.0))
@@ -387,7 +443,7 @@ function minimap.update()
 
         -- Apply offset: smooth lerp toward center, snap to center, or hold manual position
         if minimap.is_recentering then
-            local tx, ty = get_centered_offset(map.current_map_data, availWidth, availHeight, texW)
+            local tx, ty = get_centered_offset(mapData, availWidth, availHeight, texW)
             if tx then
                 -- Clamp the target so the lerp path never exits valid bounds
                 local texWidthZ      = texW * minimap.map_zoom
@@ -411,7 +467,7 @@ function minimap.update()
                 minimap.is_recentering = false
             end
         elseif not minimap.is_manually_panned then
-            compute_centered_offset(map.current_map_data, availWidth, availHeight, texW)
+            compute_centered_offset(mapData, availWidth, availHeight, texW)
             clamp_offset()
         end
 
@@ -421,7 +477,46 @@ function minimap.update()
         local posX           = windowPosX + contentMinX + minimap.map_offset.x
         local posY           = windowPosY + contentMinY + minimap.map_offset.y
 
-        local texturePointer = tonumber(ffi.cast('uint32_t', ui.texture_id))
+        -- Find the largest circle around the player fully contained in the visible minimap.
+        local playerX, playerY, playerZ = map.get_player_position()
+        local entry = mapData.entry
+        if playerX and entry then
+            local mapX, mapY = map.world_to_map_coords(entry, playerX, playerY, playerZ)
+            local pixelsPerYalmX, pixelsPerYalmY
+            local texScale
+            if entry._isCustomMap and entry._customData then
+                local referenceSize = entry._customData.referenceSize or 512.0
+                texScale = texW / referenceSize
+                pixelsPerYalmX = math.abs(entry._customData.scalingX or 0) * texScale * minimap.map_zoom
+                pixelsPerYalmY = math.abs(entry._customData.scalingY or 0) * texScale * minimap.map_zoom
+            else
+                local divisor = map.get_divisor(entry)
+                texScale = texW / 512.0
+                if divisor and divisor > 0 then
+                    pixelsPerYalmX = (512.0 / divisor) * texScale * minimap.map_zoom
+                    pixelsPerYalmY = pixelsPerYalmX
+                end
+            end
+
+            if mapX and mapY and pixelsPerYalmX and pixelsPerYalmX > 0 and pixelsPerYalmY and pixelsPerYalmY > 0 then
+                local textureX = (mapX - entry.OffsetX) * texScale
+                local textureY = (mapY - entry.OffsetY) * texScale
+                local playerScreenX = posX + textureX * minimap.map_zoom
+                local playerScreenY = posY + textureY * minimap.map_zoom
+                local left = windowPosX + contentMinX
+                local top = windowPosY + contentMinY
+                local right = left + availWidth
+                local bottom = top + availHeight
+                local radius = math.min(
+                    (playerScreenX - left) / pixelsPerYalmX,
+                    (right - playerScreenX) / pixelsPerYalmX,
+                    (playerScreenY - top) / pixelsPerYalmY,
+                    (bottom - playerScreenY) / pixelsPerYalmY)
+                minimap.visible_radius_yalms = math.max(0, radius)
+            end
+        end
+
+        local texturePointer = tonumber(ffi.cast('uint32_t', textureId))
         if texturePointer then
             local drawList = imgui.GetWindowDrawList()
 
@@ -512,54 +607,62 @@ function minimap.update()
                 showTrackedEntityLabels = boussole.config.minimapShowTrackedEntityLabels,
                 enableTracker           = boussole.config.enableTracker,
                 showLabels              = boussole.config.minimapShowLabels,
-                iconSizeHomepoint       = boussole.config.minimapIconSizeHomepoint,
-                iconSizeSurvivalGuide   = boussole.config.minimapIconSizeSurvivalGuide,
-                iconSizePlayer          = boussole.config.minimapIconSizePlayer,
-                iconSizeParty           = boussole.config.minimapIconSizeParty,
-                iconSizeAlliance        = boussole.config.minimapIconSizeAlliance,
-                iconSizeNpcEntity       = boussole.config.minimapIconSizeNpcEntity,
-                iconSizeMobEntity       = boussole.config.minimapIconSizeMobEntity,
-                iconSizeTrackedEntity   = boussole.config.minimapIconSizeTrackedEntity,
-                colorHomepoint          = boussole.config.minimapColorHomepoint,
-                colorSurvivalGuide      = boussole.config.minimapColorSurvivalGuide,
-                colorPlayer             = boussole.config.minimapColorPlayer,
-                colorParty              = boussole.config.minimapColorParty,
-                colorAlliance           = boussole.config.minimapColorAlliance,
-                colorNpcEntity          = boussole.config.minimapColorNpcEntity,
-                colorMobEntity          = boussole.config.minimapColorMobEntity,
+                iconSizeHomepoint       = boussole.config.iconSizeHomepoint,
+                iconSizeSurvivalGuide   = boussole.config.iconSizeSurvivalGuide,
+                iconSizePlayer          = boussole.config.iconSizePlayer,
+                iconSizeParty           = boussole.config.iconSizeParty,
+                iconSizeAlliance        = boussole.config.iconSizeAlliance,
+                iconSizeNpcEntity       = boussole.config.iconSizeNpcEntity,
+                iconSizeMobEntity       = boussole.config.iconSizeMobEntity,
+                iconSizeTrackedEntity   = boussole.config.iconSizeTrackedEntity,
+                markerIconHomepoint    = boussole.config.markerIconHomepoint,
+                markerIconSurvivalGuide = boussole.config.markerIconSurvivalGuide,
+                markerIconPlayer       = boussole.config.markerIconPlayer,
+                markerIconParty        = boussole.config.markerIconParty,
+                markerIconAlliance     = boussole.config.markerIconAlliance,
+                markerIconNpcEntity    = boussole.config.markerIconNpcEntity,
+                markerIconMobEntity    = boussole.config.markerIconMobEntity,
+                markerIconTrackedEntity = boussole.config.markerIconTrackedEntity,
+                colorHomepoint          = boussole.config.colorHomepoint,
+                colorSurvivalGuide      = boussole.config.colorSurvivalGuide,
+                colorPlayer             = boussole.config.colorPlayer,
+                colorParty              = boussole.config.colorParty,
+                colorAlliance           = boussole.config.colorAlliance,
+                colorNpcEntity          = boussole.config.colorNpcEntity,
+                colorMobEntity          = boussole.config.colorMobEntity,
             }
 
-            warp_overlay.draw(miniCtx, map.current_map_data,
+            warp_overlay.draw(miniCtx, mapData,
                 windowPosX, windowPosY, contentMinX, contentMinY,
                 minimap.map_offset.x, minimap.map_offset.y,
                 minimap.map_zoom, texW, overlayOpacity, contextLabels)
 
-            npc_entities.draw(miniCtx, map.current_map_data,
+            npc_entities.draw(miniCtx, mapData,
                 windowPosX, windowPosY, contentMinX, contentMinY,
                 minimap.map_offset.x, minimap.map_offset.y,
                 minimap.map_zoom, texW, overlayOpacity, contextLabels)
 
-            mob_entities.draw(miniCtx, map.current_map_data,
+            mob_entities.draw(miniCtx, mapData,
                 windowPosX, windowPosY, contentMinX, contentMinY,
                 minimap.map_offset.x, minimap.map_offset.y,
                 minimap.map_zoom, texW, overlayOpacity, contextLabels)
 
-            tracked_entities.draw(miniCtx, map.current_map_data,
+            tracked_entities.draw(miniCtx, mapData,
                 windowPosX, windowPosY, contentMinX, contentMinY,
                 minimap.map_offset.x, minimap.map_offset.y,
                 minimap.map_zoom, texW, overlayOpacity, contextLabels)
 
-            alliance_overlay.draw(miniCtx, map.current_map_data,
+            alliance_overlay.draw(miniCtx, mapData,
                 windowPosX, windowPosY, contentMinX, contentMinY,
                 minimap.map_offset.x, minimap.map_offset.y,
                 minimap.map_zoom, texW, overlayOpacity, contextLabels)
 
-            party_overlay.draw(miniCtx, map.current_map_data,
+            party_overlay.draw(miniCtx, mapData,
                 windowPosX, windowPosY, contentMinX, contentMinY,
                 minimap.map_offset.x, minimap.map_offset.y,
                 minimap.map_zoom, texW, overlayOpacity, contextLabels)
 
-            player_overlay.draw(miniCtx, map.current_map_data,
+            player_overlay.draw(miniCtx, mapData,
                 windowPosX, windowPosY, contentMinX, contentMinY,
                 minimap.map_offset.x, minimap.map_offset.y,
                 minimap.map_zoom, texW, overlayOpacity, contextLabels)
@@ -580,9 +683,6 @@ function minimap.update()
 
     imgui.End()
 
-    if boussole.isMoving and boussole.config.minimapMovingUseDifferentOpacity[1] then
-        imgui.PopStyleVar()
-    end
 end
 
 return minimap

@@ -34,7 +34,7 @@ function player_overlay.draw(contextConfig, mapData, windowPosX, windowPosY, con
     end
 
     if not player_overlay.cursor.texture then
-        player_overlay.draw_dot(mapData, windowPosX, windowPosY, contentMinX, contentMinY, mapOffsetX, mapOffsetY, mapZoom, textureWidth, contextAlpha, contextLabels)
+        player_overlay.draw_dot(mapData, windowPosX, windowPosY, contentMinX, contentMinY, mapOffsetX, mapOffsetY, mapZoom, textureWidth, contextAlpha, contextLabels, contextConfig)
         return
     end
 
@@ -63,7 +63,8 @@ function player_overlay.draw(contextConfig, mapData, windowPosX, windowPosY, con
     local heading = (entity.Heading or 0) + (math.pi / 2)
 
     local cursorSize = contextConfig.iconSizePlayer[1] or 20.0
-    local halfSize = cursorSize / 2.0
+    local markerRadius = cursorSize / 2.0
+    local markerIcon = contextConfig.markerIconPlayer and contextConfig.markerIconPlayer[1] or 'Default'
 
     -- Draw label above player if showLabels is enabled
     if showLabels then
@@ -78,7 +79,7 @@ function player_overlay.draw(contextConfig, mapData, windowPosX, windowPosY, con
     local dx = mousePosX - screenX
     local dy = mousePosY - screenY
     local distance = math.sqrt(dx * dx + dy * dy)
-    local hoverRadius = halfSize
+    local hoverRadius = markerRadius
 
     if distance <= hoverRadius then
         local playerName = entity.Name
@@ -90,13 +91,16 @@ function player_overlay.draw(contextConfig, mapData, windowPosX, windowPosY, con
 
     local drawList = imgui.GetWindowDrawList()
     local color = utils.mul_alpha(utils.rgb_to_abgr(contextConfig.colorPlayer), contextAlpha)
-    if player_overlay.cursor.pointer then
+    if utils.draw_configured_marker(drawList, markerIcon, screenX, screenY, markerRadius, color, utils.mul_alpha(0xFFFFFFFF, contextAlpha), 1.5) then
+        return
+    elseif player_overlay.cursor.pointer then
         utils.draw_rotated_texture(drawList, player_overlay.cursor.pointer, screenX, screenY, cursorSize, heading, color)
     end
 end
 
-function player_overlay.draw_dot(mapData, windowPosX, windowPosY, contentMinX, contentMinY, mapOffsetX, mapOffsetY, mapZoom, textureWidth, contextAlpha, contextLabels)
+function player_overlay.draw_dot(mapData, windowPosX, windowPosY, contentMinX, contentMinY, mapOffsetX, mapOffsetY, mapZoom, textureWidth, contextAlpha, contextLabels, contextConfig)
     contextAlpha = contextAlpha or 1.0
+    contextConfig = contextConfig or boussole.config
     -- Get player world position
     local playerX, playerY, playerZ = map.get_player_position()
     if not playerX then return end
@@ -133,18 +137,20 @@ function player_overlay.draw_dot(mapData, windowPosX, windowPosY, contentMinX, c
         if entity then
             local playerName = entity.Name
             if playerName and playerName ~= '' then
-                tooltip.add_line(string.format('%s (me)', playerName), 0xFF0000FF)
+                tooltip.add_line(string.format('%s (me)', playerName), utils.rgb_to_abgr(contextConfig.colorPlayer))
             end
         end
     end
 
-    -- Draw dot
+    -- Use the shared display-tab size and color even when the cursor texture is unavailable.
     local drawList = imgui.GetWindowDrawList()
-    local dotRadius = 5.0
-    local dotColor = utils.mul_alpha(0xFF0000FF, contextAlpha)
+    local dotRadius = (contextConfig.iconSizePlayer and contextConfig.iconSizePlayer[1] or 20.0) / 2
+    local dotColor = utils.mul_alpha(utils.rgb_to_abgr(contextConfig.colorPlayer), contextAlpha)
     local outlineColor = utils.mul_alpha(0xFFFFFFFF, contextAlpha)
-
-    utils.draw_circle_marker(drawList, screenX, screenY, dotRadius, dotColor, outlineColor, 1.5)
+    local markerIcon = contextConfig.markerIconPlayer and contextConfig.markerIconPlayer[1] or 'Default'
+    if not utils.draw_configured_marker(drawList, markerIcon, screenX, screenY, dotRadius, dotColor, outlineColor, 1.5) then
+        utils.draw_circle_marker(drawList, screenX, screenY, dotRadius, dotColor, outlineColor, 1.5)
+    end
 end
 
 return player_overlay

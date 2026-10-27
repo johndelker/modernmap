@@ -123,6 +123,21 @@ local function draw_display_toggle(label, displaySetting, labelSetting, id, colo
     imgui.Text(label)
 end
 
+local marker_icon_options = { 'Default', 'Dot', 'Circle', 'Star', 'X', 'Diamond', 'Square', 'Triangle' }
+local function draw_marker_icon_combo(label, setting)
+    local selected = setting[1] or 'Default'
+    imgui.SetNextItemWidth(140)
+    if imgui.BeginCombo(label, selected) then
+        for _, option in ipairs(marker_icon_options) do
+            if imgui.Selectable(option, selected == option) then
+                setting[1] = option
+                settings.save()
+            end
+        end
+        imgui.EndCombo()
+    end
+end
+
 -- Helper function to format entity identifier based on selected type
 local function format_identifier(entity)
     local identifierType = boussole.config.trackerIdentifierType or 'Index (Hex)'
@@ -752,6 +767,9 @@ local function draw_display_tab()
     end
     imgui.PopItemWidth()
 
+    if imgui.Checkbox('Show zone and region info', boussole.config.showMapZoneInfo) then settings.save() end
+    if imgui.Checkbox('Show map coordinates', boussole.config.showMapCoordinates) then settings.save() end
+
     if imgui.Checkbox('Show title bar', boussole.config.titleBarVisible) then settings.save() end
 
     if imgui.Checkbox('Change opacity when moving', boussole.config.transparentMapWhenMoving) then settings.save() end
@@ -777,6 +795,18 @@ local function draw_display_tab()
         draw_display_toggle('Tracked entities', boussole.config.showTrackedEntities, boussole.config.showTrackedEntityLabels, 'MapTracked', boussole.config.trackerDefaultColor, 'circle')
     end
 
+    imgui.SeparatorText('Marker icons')
+    draw_marker_icon_combo('Homepoint##MarkerIcon', boussole.config.markerIconHomepoint)
+    draw_marker_icon_combo('Survival guide##MarkerIcon', boussole.config.markerIconSurvivalGuide)
+    draw_marker_icon_combo('Player##MarkerIcon', boussole.config.markerIconPlayer)
+    draw_marker_icon_combo('Party member##MarkerIcon', boussole.config.markerIconParty)
+    draw_marker_icon_combo('Alliance member##MarkerIcon', boussole.config.markerIconAlliance)
+    draw_marker_icon_combo('NPC##MarkerIcon', boussole.config.markerIconNpcEntity)
+    draw_marker_icon_combo('Mob##MarkerIcon', boussole.config.markerIconMobEntity)
+    if boussole.config.enableTracker[1] then
+        draw_marker_icon_combo('Tracked entity##MarkerIcon', boussole.config.markerIconTrackedEntity)
+    end
+
     imgui.Spacing()
     imgui.PushItemWidth(100)
     if imgui.InputInt('NPC timeout##EntityTimeout', boussole.config.npcEntityTimeout, 5, 30) then
@@ -794,33 +824,38 @@ local function draw_display_tab()
     imgui.SeparatorText(ICON_FA_PALETTE .. ' UI appearance')
 
     imgui.Text('Icon sizes')
+    imgui.TextWrapped('Values are marker diameters in pixels and use the same scale on the full map and minimap.')
     imgui.PushItemWidth(100)
     if imgui.InputInt('Homepoint##IconSize', boussole.config.iconSizeHomepoint, 1, 5) then
-        boussole.config.iconSizeHomepoint[1] = math.max(2, math.min(20, boussole.config.iconSizeHomepoint[1]))
+        boussole.config.iconSizeHomepoint[1] = math.max(2, math.min(40, boussole.config.iconSizeHomepoint[1]))
         settings.save()
     end
     if imgui.InputInt('Survival guide##IconSize', boussole.config.iconSizeSurvivalGuide, 1, 5) then
-        boussole.config.iconSizeSurvivalGuide[1] = math.max(2, math.min(20, boussole.config.iconSizeSurvivalGuide[1]))
+        boussole.config.iconSizeSurvivalGuide[1] = math.max(2, math.min(40, boussole.config.iconSizeSurvivalGuide[1]))
         settings.save()
     end
     if imgui.InputInt('Player##IconSize', boussole.config.iconSizePlayer, 1, 5) then
-        boussole.config.iconSizePlayer[1] = math.max(4, math.min(40, boussole.config.iconSizePlayer[1]))
+        boussole.config.iconSizePlayer[1] = math.max(2, math.min(40, boussole.config.iconSizePlayer[1]))
         settings.save()
     end
     if imgui.InputInt('Party##IconSize', boussole.config.iconSizeParty, 1, 5) then
-        boussole.config.iconSizeParty[1] = math.max(4, math.min(40, boussole.config.iconSizeParty[1]))
+        boussole.config.iconSizeParty[1] = math.max(2, math.min(40, boussole.config.iconSizeParty[1]))
         settings.save()
     end
     if imgui.InputInt('Alliance##IconSize', boussole.config.iconSizeAlliance, 1, 5) then
-        boussole.config.iconSizeAlliance[1] = math.max(4, math.min(40, boussole.config.iconSizeAlliance[1]))
+        boussole.config.iconSizeAlliance[1] = math.max(2, math.min(40, boussole.config.iconSizeAlliance[1]))
         settings.save()
     end
     if imgui.InputInt('NPC entity##IconSize', boussole.config.iconSizeNpcEntity, 1, 5) then
-        boussole.config.iconSizeNpcEntity[1] = math.max(2, math.min(20, boussole.config.iconSizeNpcEntity[1]))
+        boussole.config.iconSizeNpcEntity[1] = math.max(2, math.min(40, boussole.config.iconSizeNpcEntity[1]))
         settings.save()
     end
     if imgui.InputInt('Mob entity##IconSize', boussole.config.iconSizeMobEntity, 1, 5) then
-        boussole.config.iconSizeMobEntity[1] = math.max(2, math.min(20, boussole.config.iconSizeMobEntity[1]))
+        boussole.config.iconSizeMobEntity[1] = math.max(2, math.min(40, boussole.config.iconSizeMobEntity[1]))
+        settings.save()
+    end
+    if boussole.config.enableTracker[1] and imgui.InputInt('Tracked entity##IconSize', boussole.config.iconSizeTrackedEntity, 1, 5) then
+        boussole.config.iconSizeTrackedEntity[1] = math.max(2, math.min(40, boussole.config.iconSizeTrackedEntity[1]))
         settings.save()
     end
     imgui.PopItemWidth()
@@ -1383,6 +1418,14 @@ local function draw_minimap_tab()
     end
     imgui.Spacing()
 
+    if imgui.Checkbox('Hide During Cutscenes', boussole.config.minimapHideDuringCutscenes) then
+        settings.save()
+    end
+    if imgui.Checkbox('Hide On Boat', boussole.config.minimapHideOnBoat) then
+        settings.save()
+    end
+    imgui.Spacing()
+
     imgui.PushItemWidth(100)
     if imgui.InputInt('Size (px)', boussole.config.minimapSize, 10, 50) then
         boussole.config.minimapSize[1] = math.max(80, math.min(600, boussole.config.minimapSize[1]))
@@ -1446,72 +1489,17 @@ local function draw_minimap_tab()
 
     imgui.SeparatorText(ICON_FA_FILTER .. ' Display options')
 
-    draw_display_toggle('Homepoints', boussole.config.minimapShowHomepoints, boussole.config.minimapShowHomepointLabels, 'MMHomepoints', boussole.config.minimapColorHomepoint, 'diamond')
-    draw_display_toggle('Survival guides', boussole.config.minimapShowSurvivalGuides, boussole.config.minimapShowSurvivalGuideLabels, 'MMSurvivalGuides', boussole.config.minimapColorSurvivalGuide, 'square')
-    draw_display_toggle('Player (me)', boussole.config.minimapShowPlayer, boussole.config.minimapShowPlayerLabels, 'MMPlayer', boussole.config.minimapColorPlayer, 'cursor')
-    draw_display_toggle('Party members', boussole.config.minimapShowParty, boussole.config.minimapShowPartyLabels, 'MMParty', boussole.config.minimapColorParty, 'cursor')
-    draw_display_toggle('Alliance members', boussole.config.minimapShowAlliance, boussole.config.minimapShowAllianceLabels, 'MMAlliance', boussole.config.minimapColorAlliance, 'cursor')
-    draw_display_toggle('NPC entities', boussole.config.minimapShowNpcEntities, boussole.config.minimapShowNpcEntityLabels, 'MMNpcs', boussole.config.minimapColorNpcEntity, 'circle')
-    draw_display_toggle('Mob entities', boussole.config.minimapShowMobEntities, boussole.config.minimapShowMobEntityLabels, 'MMMobs', boussole.config.minimapColorMobEntity, 'circle')
+    draw_display_toggle('Homepoints', boussole.config.minimapShowHomepoints, boussole.config.minimapShowHomepointLabels, 'MMHomepoints', boussole.config.colorHomepoint, 'diamond')
+    draw_display_toggle('Survival guides', boussole.config.minimapShowSurvivalGuides, boussole.config.minimapShowSurvivalGuideLabels, 'MMSurvivalGuides', boussole.config.colorSurvivalGuide, 'square')
+    draw_display_toggle('Player (me)', boussole.config.minimapShowPlayer, boussole.config.minimapShowPlayerLabels, 'MMPlayer', boussole.config.colorPlayer, 'cursor')
+    draw_display_toggle('Party members', boussole.config.minimapShowParty, boussole.config.minimapShowPartyLabels, 'MMParty', boussole.config.colorParty, 'cursor')
+    draw_display_toggle('Alliance members', boussole.config.minimapShowAlliance, boussole.config.minimapShowAllianceLabels, 'MMAlliance', boussole.config.colorAlliance, 'cursor')
+    draw_display_toggle('NPC entities', boussole.config.minimapShowNpcEntities, boussole.config.minimapShowNpcEntityLabels, 'MMNpcs', boussole.config.colorNpcEntity, 'circle')
+    draw_display_toggle('Mob entities', boussole.config.minimapShowMobEntities, boussole.config.minimapShowMobEntityLabels, 'MMMobs', boussole.config.colorMobEntity, 'circle')
     if boussole.config.enableTracker[1] then
         draw_display_toggle('Tracked entities', boussole.config.minimapShowTrackedEntities, boussole.config.minimapShowTrackedEntityLabels, 'MMTracked', boussole.config.trackerDefaultColor, 'circle')
     end
 
-    imgui.SeparatorText(ICON_FA_PALETTE .. ' UI appearance')
-
-    imgui.Text('Icon sizes')
-    imgui.PushItemWidth(100)
-    if imgui.InputInt('Homepoint##MMIconSize', boussole.config.minimapIconSizeHomepoint, 1, 5) then
-        boussole.config.minimapIconSizeHomepoint[1] = math.max(2, math.min(20, boussole.config.minimapIconSizeHomepoint[1]))
-        settings.save()
-    end
-    if imgui.InputInt('Survival guide##MMIconSize', boussole.config.minimapIconSizeSurvivalGuide, 1, 5) then
-        boussole.config.minimapIconSizeSurvivalGuide[1] = math.max(2, math.min(20, boussole.config.minimapIconSizeSurvivalGuide[1]))
-        settings.save()
-    end
-    if imgui.InputInt('Player##MMIconSize', boussole.config.minimapIconSizePlayer, 1, 5) then
-        boussole.config.minimapIconSizePlayer[1] = math.max(4, math.min(40, boussole.config.minimapIconSizePlayer[1]))
-        settings.save()
-    end
-    if imgui.InputInt('Party##MMIconSize', boussole.config.minimapIconSizeParty, 1, 5) then
-        boussole.config.minimapIconSizeParty[1] = math.max(4, math.min(40, boussole.config.minimapIconSizeParty[1]))
-        settings.save()
-    end
-    if imgui.InputInt('Alliance##MMIconSize', boussole.config.minimapIconSizeAlliance, 1, 5) then
-        boussole.config.minimapIconSizeAlliance[1] = math.max(4, math.min(40, boussole.config.minimapIconSizeAlliance[1]))
-        settings.save()
-    end
-    if imgui.InputInt('NPC entity##MMIconSize', boussole.config.minimapIconSizeNpcEntity, 1, 5) then
-        boussole.config.minimapIconSizeNpcEntity[1] = math.max(2, math.min(30, boussole.config.minimapIconSizeNpcEntity[1]))
-        settings.save()
-    end
-    if imgui.InputInt('Mob entity##MMIconSize', boussole.config.minimapIconSizeMobEntity, 1, 5) then
-        boussole.config.minimapIconSizeMobEntity[1] = math.max(2, math.min(30, boussole.config.minimapIconSizeMobEntity[1]))
-        settings.save()
-    end
-    if boussole.config.enableTracker[1] then
-        imgui.PushItemWidth(100)
-        if imgui.InputInt('Tracked entity##MMIconSize', boussole.config.minimapIconSizeTrackedEntity, 1, 5) then
-            boussole.config.minimapIconSizeTrackedEntity[1] = math.max(2, math.min(30, boussole.config.minimapIconSizeTrackedEntity[1]))
-            settings.save()
-        end
-        imgui.PopItemWidth()
-    end
-    imgui.PopItemWidth()
-    imgui.Spacing()
-
-    imgui.Separator()
-    imgui.Text('Colors')
-    if imgui.ColorEdit4('Homepoint##MMColor', boussole.config.minimapColorHomepoint, ImGuiColorEditFlags_NoInputs) then settings.save() end
-    if imgui.ColorEdit4('Survival guide##MMColor', boussole.config.minimapColorSurvivalGuide, ImGuiColorEditFlags_NoInputs) then settings.save() end
-    if imgui.ColorEdit4('Player (me)##MMColor', boussole.config.minimapColorPlayer, ImGuiColorEditFlags_NoInputs) then settings.save() end
-    if imgui.ColorEdit4('Party##MMColor', boussole.config.minimapColorParty, ImGuiColorEditFlags_NoInputs) then settings.save() end
-    if imgui.ColorEdit4('Alliance##MMColor', boussole.config.minimapColorAlliance, ImGuiColorEditFlags_NoInputs) then settings.save() end
-    if imgui.ColorEdit4('NPC entity##MMColor', boussole.config.minimapColorNpcEntity, ImGuiColorEditFlags_NoInputs) then settings.save() end
-    if imgui.ColorEdit4('Mob entity##MMColor', boussole.config.minimapColorMobEntity, ImGuiColorEditFlags_NoInputs) then settings.save() end
-    if imgui.ColorEdit4('Controls btn##MMColor', boussole.config.minimapColorControlsBtn, ImGuiColorEditFlags_NoInputs) then settings.save() end
-    if imgui.ColorEdit4('Controls btn active##MMColor', boussole.config.minimapColorControlsBtnActive, ImGuiColorEditFlags_NoInputs) then settings.save() end
-    imgui.Spacing()
 end
 
 function panel.draw(windowPosX, windowPosY, contentMinX, contentMinY, contentMaxX, contentMaxY)

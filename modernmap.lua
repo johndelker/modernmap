@@ -1,5 +1,5 @@
 addon.name = 'boussole'
-addon.version = "1.19"
+addon.version = "1.18"
 addon.author = 'looney'
 addon.desc = 'Replacement for in-game map with additional features.'
 addon.link = 'https://github.com/loonsies/boussole'
@@ -17,6 +17,7 @@ local tracker = require('src.tracker')
 local map_data_editor = require('src.map_data_editor')
 local custom_points = require('src.overlays.custom_points')
 local minimap = require('src.minimap')
+local party_positions = require('src.party_positions')
 
 boussole = {
     config = {},
@@ -135,6 +136,8 @@ ashita.events.register('load', 'load_cb', function ()
 end)
 
 ashita.events.register('unload', 'unload_cb', function ()
+    -- Clean up the foreground pass from versions that registered it.
+    ashita.events.unregister('d3d_present', 'boussole_foreground_map_cb')
     ui.save_view_state()
     tracker.save_tracker_data()
     settings.save()
@@ -197,11 +200,20 @@ ashita.events.register('d3d_present', 'd3d_present_cb', function ()
         boussole.last_player_pos = { x = x, y = y, z = z }
     end
 
-    ui.update()
-
     if not boussole.zoning then
         minimap.update()
+
+        if boussole.visible[1] or boussole.config.minimapVisible[1] then
+            party_positions.update_requests(
+                map.get_player_zone(),
+                boussole.visible[1],
+                boussole.config.minimapVisible[1] and minimap.visible_radius_yalms or nil)
+        end
     end
+
+    -- Draw the full map after the minimap so it remains above it when their
+    -- windows overlap, including immediately after a zone change.
+    ui.update()
 end)
 
 ashita.events.register('d3d_beginscene', 'd3d_beginscene_cb', function ()
@@ -216,6 +228,8 @@ ashita.events.register('command', 'command_cb', function (cmd, nType)
 end)
 
 ashita.events.register('packet_in', 'packet_in_cb', function (e)
+    party_positions.handle_packet(e)
+
     if (e.id == 0x000A) then
         if boussole.zoning then
             boussole.visible[1] = boussole.preZoneVisible
@@ -234,6 +248,7 @@ ashita.events.register('packet_in', 'packet_in_cb', function (e)
         local newZone = struct.unpack('H', e.data, 0x30 + 1)
         local newSubZone = struct.unpack('H', e.data, 0x9E + 1)
         boussole.last_sub_zone_id = newSubZone or 0
+        party_positions.clear()
 
         ashita.tasks.once(1, function ()
             local mapData, err = map.load_current_map_dat()

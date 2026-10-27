@@ -35,6 +35,16 @@ local default = T {
     iconSizeNpcEntity = { 4 },
     iconSizeMobEntity = { 4 },
     iconSizeTrackedEntity = { 10 },
+    showMapZoneInfo = { true },
+    showMapCoordinates = { true },
+    markerIconHomepoint = { 'Default' },
+    markerIconSurvivalGuide = { 'Default' },
+    markerIconPlayer = { 'Default' },
+    markerIconParty = { 'Default' },
+    markerIconAlliance = { 'Default' },
+    markerIconNpcEntity = { 'Default' },
+    markerIconMobEntity = { 'Default' },
+    markerIconTrackedEntity = { 'Default' },
     colorHomepoint = { 0.0, 1.0, 1.0, 1.0 },
     colorSurvivalGuide = { 1.0, 0.667, 0.0, 1.0 },
     colorPlayer = { 1.0, 0.0, 0.0, 1.0 },
@@ -61,6 +71,8 @@ local default = T {
     mobEntityTimeout = { 20 },
     sameFloorExceptions = {},
     minimapVisible = { false },
+    minimapHideDuringCutscenes = { true },
+    minimapHideOnBoat = { false },
     minimapLocked = { false },
     minimapSize = { 200 },
     minimapViews = {},
@@ -91,27 +103,23 @@ local default = T {
     minimapShowNpcEntityLabels = { false },
     minimapShowMobEntityLabels = { false },
     minimapShowTrackedEntityLabels = { true },
-    minimapIconSizeHomepoint = { 8 },
-    minimapIconSizeSurvivalGuide = { 8 },
-    minimapIconSizePlayer = { 20 },
-    minimapIconSizeParty = { 20 },
-    minimapIconSizeAlliance = { 20 },
-    minimapIconSizeNpcEntity = { 4 },
-    minimapIconSizeMobEntity = { 4 },
-    minimapIconSizeTrackedEntity = { 10 },
-    minimapColorHomepoint = { 0.0, 1.0, 1.0, 1.0 },
-    minimapColorSurvivalGuide = { 1.0, 0.667, 0.0, 1.0 },
-    minimapColorPlayer = { 1.0, 0.0, 0.0, 1.0 },
-    minimapColorParty = { 0.349, 0.639, 1.0, 1.0 },
-    minimapColorAlliance = { 0.212, 0.894, 0.424, 1.0 },
-    minimapColorNpcEntity = { 0.0, 1.0, 0.71, 1.0 },
-    minimapColorMobEntity = { 1.0, 0.116, 0.0, 1.0 },
-    minimapColorControlsBtn = { 0.267, 0.267, 0.267, 0.533 },
-    minimapColorControlsBtnActive = { 0.2941, 0.3922, 0.7843, 1.0 },
 }
 
 config.load = function ()
-    return settings.load(default)
+    local loaded = settings.load(default)
+    -- These visual settings now come from shared Display settings. Discard
+    -- legacy minimap-only marker and control-button overrides.
+    for _, key in ipairs({
+        'minimapIconSizeHomepoint', 'minimapIconSizeSurvivalGuide', 'minimapIconSizePlayer',
+        'minimapIconSizeParty', 'minimapIconSizeAlliance', 'minimapIconSizeNpcEntity',
+        'minimapIconSizeMobEntity', 'minimapIconSizeTrackedEntity',
+        'minimapColorHomepoint', 'minimapColorSurvivalGuide', 'minimapColorPlayer',
+        'minimapColorParty', 'minimapColorAlliance', 'minimapColorNpcEntity', 'minimapColorMobEntity',
+        'minimapColorControlsBtn', 'minimapColorControlsBtnActive',
+    }) do
+        loaded[key] = nil
+    end
+    return loaded
 end
 
 return config
